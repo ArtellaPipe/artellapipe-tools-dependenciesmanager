@@ -125,31 +125,43 @@ class DependenciesManager(artellapipe.Tool, object):
 
         self._files_list.model().dataChanged.connect(self._on_data_changed)
         self._browse_btn.clicked.connect(self._on_browse)
-        self._refresh_btn.clicked.connect(self._update_items)
+        self._refresh_btn.clicked.connect(self._on_refresh)
         self._sync_btn.clicked.connect(self._on_sync)
         self._all_cbx.toggled.connect(self._on_toggle_all)
 
-    def post_attacher_set(self):
-        self._init()
-
-    def _init(self):
+    def _on_refresh(self):
         """
         Internal function that initializes Dependencies Manager UI
         """
 
-        scene_name = tp.Dcc.scene_name()
-        if not scene_name or not os.path.isfile(scene_name):
-            return False
+        current_path = self._folder_path.text()
+        if not current_path or not os.path.isfile(current_path):
+            current_path = tp.Dcc.scene_name()
+            if not current_path or not os.path.isfile(current_path):
+                return False
 
-        self._on_browse(scene_name)
+        if current_path and os.path.isfile(current_path):
+            self._on_browse(current_path)
 
     def _update_items(self):
         """
         Function that refresh all the items
         """
 
-        self._refresh_files()
-        self._refresh_versions()
+        try:
+            self._progress_lbl.setText('Getting dependencies from file... Please wait!')
+            self.repaint()
+            self._refresh_files()
+            self._progress_lbl.setText('Getting dependencies versions ... Please wait!')
+            self.repaint()
+            self._refresh_versions()
+        except Exception as e:
+            LOGGER.error(str(e))
+            LOGGER.error(traceback.format_exc())
+        finally:
+            self._progress.setValue(0)
+            self._progress_lbl.setText('')
+            self._progress.setVisible(False)
 
     def _refresh_files(self):
         root_path = self._folder_path.text()
@@ -158,7 +170,7 @@ class DependenciesManager(artellapipe.Tool, object):
 
         self._files_list.clear()
 
-        deps = artellapipe.DepsMgr().get_current_scene_dependencies()
+        deps = artellapipe.DepsMgr().get_dependencies(root_path)
         if not deps:
             return
 
@@ -295,7 +307,7 @@ class DependenciesManager(artellapipe.Tool, object):
             start_directory = self._project.get_path()
 
         if not export_path or not os.path.isfile(export_path):
-            export_path = tp.Dcc.select_folder_dialog(
+            export_path = tp.Dcc.select_file_dialog(
                 title='Select Root Path',
                 start_directory=start_directory
             )
@@ -330,7 +342,7 @@ class DependenciesManager(artellapipe.Tool, object):
         locked = False
         try:
             self._progress.setVisible(True)
-            self._progress_lbl.setText('Synchronizing files ... Please wait!')
+            self._progress_lbl.setText('Updating Dependencies ... Please wait!')
             self.repaint()
 
             updated = False
@@ -354,9 +366,11 @@ class DependenciesManager(artellapipe.Tool, object):
                         'You will need to update the dependency manually'.format(item.path, item.latest_path))
                     continue
 
-                artellapipe.FilesMgr().lock_file(current_path, notify=False)
-                locked = True
+                fixed_path = artellapipe.FilesMgr().resolve_path(item.path)
+                latest_fixed_path = artellapipe.FilesMgr().resolve_path(item.latest_path)
+
                 updated_file = False
+                locked = artellapipe.FilesMgr().lock_file(current_path, notify=False)
                 with open(current_path, 'r') as f:
                     with open(temp_file, 'w') as out:
                         out_lines = list()
@@ -368,17 +382,22 @@ class DependenciesManager(artellapipe.Tool, object):
                                     line = line.replace(item.path, item.latest_path)
                                     updated_file = True
                                     updated = True
+                            if fixed_path in line:
+                                if self._line_can_be_updated(line):
+                                    LOGGER.info('Updating Dependency: {} ----> {}'.format(item.path, item.latest_path))
+                                    line = line.replace(fixed_path, latest_fixed_path)
+                                    updated_file = True
+                                    updated = True
                             out_lines.append(line)
                         out.writelines(out_lines)
 
-                if updated_file:
+                if updated_file and os.access(current_path, os.W_OK):
                     os.remove(current_path)
                     os.rename(temp_file, current_path)
 
-            if not updated:
-                if os.path.isfile(temp_file):
-                    os.remove(temp_file)
-            else:
+            if os.path.isfile(temp_file):
+                os.remove(temp_file)
+            if updated:
                 tp.Dcc.open_file(current_path, force=True)
 
         except Exception as e:
@@ -392,7 +411,7 @@ class DependenciesManager(artellapipe.Tool, object):
             self._update_items()
 
     def _line_can_be_updated(self, line):
-        if '-rdi' in line or '-r' in line or '.cfn' in line or '.fn' in line:
+        if '-rdi' in line or '-r' or '-typ' in line or '.cfn' in line or '.fn' in line:
             return True
 
         return False
