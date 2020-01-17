@@ -35,8 +35,11 @@ LOGGER = logging.getLogger()
 
 class DependenciesManager(artellapipe.Tool, object):
 
-    def __init__(self, project, config):
+    def __init__(self, project, config, file_path=None):
+        self._init_file_path = file_path
         super(DependenciesManager, self).__init__(project=project, config=config)
+
+        self._init()
 
     def get_main_layout(self):
         main_layout = QVBoxLayout()
@@ -143,6 +146,15 @@ class DependenciesManager(artellapipe.Tool, object):
         if current_path and os.path.isfile(current_path):
             self._on_browse(current_path)
 
+    def _init(self):
+        """
+        Internal function that is called after launching the tool
+        """
+
+        if self._init_file_path and os.path.isfile(self._init_file_path):
+            self._folder_path.setText(self._init_file_path)
+            self._update_items()
+
     def _update_items(self):
         """
         Function that refresh all the items
@@ -170,41 +182,75 @@ class DependenciesManager(artellapipe.Tool, object):
 
         self._files_list.clear()
 
-        deps = artellapipe.DepsMgr().get_dependencies(root_path)
-        if not deps:
-            return
+        deps, invalid_deps = artellapipe.DepsMgr().get_dependencies(root_path)
 
         project_path = self._project.get_path()
 
-        for file_path, files in deps.items():
-            try:
-                rel_path = os.path.relpath(file_path, project_path)
-            except Exception:
-                rel_path = file_path
-            file_path_item = QTreeWidgetItem()
-            file_path_item.setText(0, rel_path)
-            file_path_item.path = file_path
+        invalid_deps_found = False
+        invalid_deps_fixed = False
+        if invalid_deps:
+            invalid_deps_found = True
+            result = qtutils.show_question(
+                None, 'Invalid dependencies found',
+                'Invalid dependencies paths found in current file. If you continue, dependencies manager will try to '
+                'fix them. Are you sure you want to continue?')
+            if result == QMessageBox.No:
+                return
 
-            for f in files:
-                try:
-                    rel_path = os.path.relpath(f, project_path)
-                except Exception:
-                    rel_path = f
-                f_item = QTreeWidgetItem()
-                f_item.setText(0, rel_path)
-                f_item.path = f
-                f_item.latest_path = None
-                f_item.setFlags(f_item.flags() | Qt.ItemIsUserCheckable)
-                f_item.setTextAlignment(1, Qt.AlignCenter)
-                f_item.setTextAlignment(2, Qt.AlignCenter)
-                if self._all_cbx.isChecked():
-                    f_item.setCheckState(0, Qt.Checked)
+            artellapipe.DepsMgr().fix_file_paths(root_path)
+            deps, invalid_deps = artellapipe.DepsMgr().get_dependencies(root_path)
+            if invalid_deps:
+                artellapipe.FilesMgr().sync_files(invalid_deps)
+                deps, invalid_deps = artellapipe.DepsMgr().get_dependencies(root_path)
+                if invalid_deps:
+                    qtutils.show_warning(
+                        None, 'Invalid dependencies found',
+                        'Invalid dependencies paths found in current file.\n\n' + '\n'.join(invalid_deps) +
+                        'Please fix paths manually!')
+                    return
                 else:
-                    f_item.setCheckState(0, Qt.Unchecked)
-                file_path_item.addChild(f_item)
+                    invalid_deps_fixed = True
+            else:
+                invalid_deps_fixed = True
 
-            if file_path_item.childCount() > 0:
-                self._files_list.addTopLevelItem(file_path_item)
+        if invalid_deps_found and invalid_deps_fixed:
+            result = qtutils.show_question(
+                None, 'File paths updated in file', 'File Paths fixed in the following file: "{}". '
+                'Do you want to upload new version of the file to Artella server?'.format(root_path))
+            if result == QMessageBox.Yes:
+                artellapipe.FilesMgr().upload_working_version(
+                    root_path, skip_saving=True, notify=False, comment='DependenciesManager: Fixed paths')
+
+        if deps:
+            for file_path, files in deps.items():
+                try:
+                    rel_path = os.path.relpath(file_path, project_path)
+                except Exception:
+                    rel_path = file_path
+                file_path_item = QTreeWidgetItem()
+                file_path_item.setText(0, rel_path)
+                file_path_item.path = file_path
+
+                for f in files:
+                    try:
+                        rel_path = os.path.relpath(f, project_path)
+                    except Exception:
+                        rel_path = f
+                    f_item = QTreeWidgetItem()
+                    f_item.setText(0, rel_path)
+                    f_item.path = f
+                    f_item.latest_path = None
+                    f_item.setFlags(f_item.flags() | Qt.ItemIsUserCheckable)
+                    f_item.setTextAlignment(1, Qt.AlignCenter)
+                    f_item.setTextAlignment(2, Qt.AlignCenter)
+                    if self._all_cbx.isChecked():
+                        f_item.setCheckState(0, Qt.Checked)
+                    else:
+                        f_item.setCheckState(0, Qt.Unchecked)
+                    file_path_item.addChild(f_item)
+
+                if file_path_item.childCount() > 0:
+                    self._files_list.addTopLevelItem(file_path_item)
 
         self._files_list.expandAll()
         self._files_list.resizeColumnToContents(0)
@@ -227,10 +273,13 @@ class DependenciesManager(artellapipe.Tool, object):
             self._progress_lbl.setText('Checking file versions ... Please wait!')
             for i, item in enumerate(all_items):
                 self._progress.setValue(i)
-                self._progress_lbl.setText('Checking version for: {}'.format(item.text(1)))
+                self._progress_lbl.setText('Checking version for: {}'.format(item.text(0)))
                 if working_folder in item.path:
                     path_name = os.path.basename(item.path)
                     current_versions = artellalib.get_current_version(item.path)
+                    if not current_versions.get(path_name, None):
+                        artellapipe.FilesMgr().sync_files([item.path])
+                        current_versions = artellalib.get_current_version(item.path)
                     latest_versions = artellalib.get_latest_version(item.path)
                     current_version = current_versions.get(path_name, None)
                     latest_version = latest_versions.get(path_name, None)
@@ -331,11 +380,12 @@ class DependenciesManager(artellapipe.Tool, object):
             LOGGER.warning('No Dependencies to Update checked!')
             return
 
+        open_file = True
         result = qtutils.show_question(
             None, 'Updating Dependencies',
-            'Current file will be reopened after files are synced. Are you sure you want to continue?')
+            'Do you want to open file after files are synced?')
         if result == QMessageBox.No:
-            return
+            open_file = False
 
         working_folder = artella.config.get('server', 'working_folder')
 
@@ -358,7 +408,11 @@ class DependenciesManager(artellapipe.Tool, object):
                 else:
                     folder_to_sync = os.path.dirname(os.path.dirname(item.latest_path))
 
-                artellapipe.FilesMgr().sync_paths([folder_to_sync], recursive=True)
+                split_text = os.path.splitext(folder_to_sync)
+                if split_text[-1]:
+                    artellapipe.FilesMgr().sync_files([folder_to_sync])
+                else:
+                    artellapipe.FilesMgr().sync_paths([folder_to_sync], recursive=True)
 
                 if not os.path.exists(folder_to_sync):
                     LOGGER.warning(
@@ -397,7 +451,7 @@ class DependenciesManager(artellapipe.Tool, object):
 
             if os.path.isfile(temp_file):
                 os.remove(temp_file)
-            if updated:
+            if updated and open_file:
                 tp.Dcc.open_file(current_path, force=True)
 
         except Exception as e:
