@@ -205,8 +205,8 @@ class DependenciesManager(artellapipe.Tool, object):
                 if invalid_deps:
                     qtutils.show_warning(
                         None, 'Invalid dependencies found',
-                        'Invalid dependencies paths found in current file.\n\n' + '\n'.join(invalid_deps) +
-                        'Please fix paths manually!')
+                        'Invalid dependencies paths found in current file.\n\n' + '\n'.join(
+                            invalid_deps) + 'Please fix paths manually!')
                     return
                 else:
                     invalid_deps_fixed = True
