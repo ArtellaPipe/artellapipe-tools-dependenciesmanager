@@ -20,24 +20,23 @@ from Qt.QtWidgets import *
 from Qt.QtCore import *
 from Qt.QtGui import *
 
-import tpDccLib as tp
+import tpDcc as tp
 
-from tpQtLib.core import qtutils
-from tpQtLib.widgets import splitters
+from tpDcc.libs.qt.core import qtutils
+from tpDcc.libs.qt.widgets import splitters
 
 import artellapipe
 from artellapipe.libs import artella
 from artellapipe.libs.artella.core import artellalib
-from artellapipe.utils import resource
 
 LOGGER = logging.getLogger()
 
 
-class DependenciesManager(artellapipe.Tool, object):
+class DependenciesManager(artellapipe.ToolWidget, object):
 
-    def __init__(self, project, config, file_path=None):
+    def __init__(self, project, config, settings, parent, file_path=None):
         self._init_file_path = file_path
-        super(DependenciesManager, self).__init__(project=project, config=config)
+        super(DependenciesManager, self).__init__(project=project, config=config, settings=settings, parent=parent)
 
         self._init()
 
@@ -68,14 +67,14 @@ class DependenciesManager(artellapipe.Tool, object):
         self._folder_path.setToolTip(tip)
         self._folder_path.setStatusTip(tip)
         self._folder_path.setContextMenuPolicy(Qt.CustomContextMenu)
-        browse_icon = resource.ResourceManager().icon('open')
+        browse_icon = tp.ResourcesMgr().icon('open')
         self._browse_btn = QPushButton()
         self._browse_btn.setFlat(True)
         self._browse_btn.setIcon(browse_icon)
         self._browse_btn.setFixedWidth(30)
         self._browse_btn.setToolTip('Browse Root Folder')
         self._browse_btn.setStatusTip('Browse Root Folder')
-        refresh_icon = resource.ResourceManager().icon('refresh')
+        refresh_icon = tp.ResourcesMgr().icon('refresh')
         self._refresh_btn = QPushButton()
         self._refresh_btn.setFlat(True)
         self._refresh_btn.setIcon(refresh_icon)
@@ -113,7 +112,7 @@ class DependenciesManager(artellapipe.Tool, object):
         buttons_layout.setContentsMargins(2, 2, 2, 2)
         buttons_layout.setSpacing(2)
 
-        sync_icon = resource.ResourceManager().icon('sync')
+        sync_icon = tp.ResourcesMgr().icon('sync')
         self._sync_btn = QPushButton()
         self._sync_btn.setIcon(sync_icon)
         buttons_layout.addWidget(self._sync_btn)
