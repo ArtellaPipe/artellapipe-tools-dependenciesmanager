@@ -1,0 +1,7 @@
+artellapipe.tools.dependenciesmanager.core.dependenciesmanager module
+=====================================================================
+
+.. automodule:: artellapipe.tools.dependenciesmanager.core.dependenciesmanager
+   :members:
+   :undoc-members:
+   :show-inheritance:

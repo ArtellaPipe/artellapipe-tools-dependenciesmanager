@@ -1,0 +1,17 @@
+artellapipe.tools.dependenciesmanager.widgets package
+=====================================================
+
+Submodules
+----------
+
+.. toctree::
+
+   artellapipe.tools.dependenciesmanager.widgets.dependenciesmanager
+
+Module contents
+---------------
+
+.. automodule:: artellapipe.tools.dependenciesmanager.widgets
+   :members:
+   :undoc-members:
+   :show-inheritance:

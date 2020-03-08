@@ -1,12 +1,13 @@
 artellapipe.tools.dependenciesmanager package
 =============================================
 
-Submodules
-----------
+Subpackages
+-----------
 
 .. toctree::
 
-   artellapipe.tools.dependenciesmanager.dependenciesmanager
+   artellapipe.tools.dependenciesmanager.core
+   artellapipe.tools.dependenciesmanager.widgets
 
 Module contents
 ---------------
