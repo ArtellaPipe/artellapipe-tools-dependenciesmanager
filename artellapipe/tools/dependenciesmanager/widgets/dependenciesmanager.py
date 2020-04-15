@@ -23,7 +23,7 @@ from Qt.QtGui import *
 import tpDcc as tp
 
 from tpDcc.libs.qt.core import qtutils
-from tpDcc.libs.qt.widgets import splitters
+from tpDcc.libs.qt.widgets import dividers
 
 import artellapipe
 from artellapipe.libs import artella
@@ -81,7 +81,7 @@ class DependenciesManager(artellapipe.ToolWidget, object):
         path_base_layout.addWidget(path_lbl)
         path_base_layout.addWidget(self._folder_path)
         path_base_layout.addWidget(self._browse_btn)
-        path_base_layout.addWidget(splitters.get_horizontal_separator_widget())
+        path_base_layout.addWidget(dividers.get_horizontal_separator_widget())
         path_base_layout.addWidget(self._refresh_btn)
 
         self._all_cbx = QCheckBox()
@@ -118,7 +118,7 @@ class DependenciesManager(artellapipe.ToolWidget, object):
         buttons_layout.addWidget(self._sync_btn)
 
         self.main_layout.addWidget(self._path_widget)
-        self.main_layout.addLayout(splitters.SplitterLayout())
+        self.main_layout.addLayout(dividers.DividerLayout())
         self.main_layout.addLayout(cbx_lyt)
         self.main_layout.addWidget(self._files_list)
         self.main_layout.addWidget(self._progress)
@@ -262,7 +262,7 @@ class DependenciesManager(artellapipe.ToolWidget, object):
         :return:
         """
 
-        working_folder = artella.config.get('server', 'working_folder')
+        working_folder = self._project.get_working_folder()
 
         try:
             all_items = list(self._all_items())
@@ -348,7 +348,7 @@ class DependenciesManager(artellapipe.ToolWidget, object):
         self._total_items_lbl.setText('Total Checked Items: {}'.format(total_checked_items))
 
     def _on_browse(self, export_path=None):
-        stored_path = self.settings().get('upload_path')
+        stored_path = self.settings.get('upload_path')
         if stored_path and os.path.isdir(stored_path):
             start_directory = stored_path
         else:
@@ -362,7 +362,7 @@ class DependenciesManager(artellapipe.ToolWidget, object):
         if not export_path:
             return
 
-        self.settings().set('upload_path', str(export_path))
+        self.settings.set('upload_path', str(export_path))
 
         self._folder_path.setText(export_path)
 
@@ -386,7 +386,7 @@ class DependenciesManager(artellapipe.ToolWidget, object):
         if result == QMessageBox.No:
             open_file = False
 
-        working_folder = artella.config.get('server', 'working_folder')
+        working_folder = self._project.get_working_folder()
 
         locked = False
         try:
