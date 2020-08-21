@@ -12,22 +12,19 @@ __license__ = "MIT"
 __maintainer__ = "Tomas Poveda"
 __email__ = "tpovedatd@gmail.com"
 
-import artellapipe
+from artellapipe.core import tool
 
 # Defines ID of the tool
 TOOL_ID = 'artellapipe-tools-dependenciesmanager'
 
-# We skip the reloading of this module when launching the tool
-no_reload = True
 
-
-class DependenciesManagerTool(artellapipe.Tool, object):
+class DependenciesManagerTool(tool.ArtellaTool, object):
     def __init__(self, *args, **kwargs):
         super(DependenciesManagerTool, self).__init__(*args, **kwargs)
 
     @classmethod
     def config_dict(cls, file_name=None):
-        base_tool_config = artellapipe.Tool.config_dict(file_name=file_name)
+        base_tool_config = tool.ArtellaTool.config_dict(file_name=file_name)
         tool_config = {
             'name': 'Artella Dependencies Manager',
             'id': 'artellapipe-tools-dependenciesmanager',
@@ -54,10 +51,13 @@ class DependenciesManagerTool(artellapipe.Tool, object):
         return base_tool_config
 
 
-class DependenciesManagerToolset(artellapipe.Toolset, object):
+class DependenciesManagerToolset(tool.ArtellaToolset, object):
     ID = TOOL_ID
 
     def __init__(self, *args, **kwargs):
+
+        self._file_path = kwargs.pop('file_path', None)
+
         super(DependenciesManagerToolset, self).__init__(*args, **kwargs)
 
     def contents(self):
@@ -65,5 +65,5 @@ class DependenciesManagerToolset(artellapipe.Toolset, object):
         from artellapipe.tools.dependenciesmanager.widgets import dependenciesmanager
 
         dependencies_manager = dependenciesmanager.DependenciesManager(
-            project=self._project, config=self._config, settings=self._settings, parent=self)
+            project=self._project, config=self._config, settings=self._settings, parent=self, file_path=self._file_path)
         return [dependencies_manager]

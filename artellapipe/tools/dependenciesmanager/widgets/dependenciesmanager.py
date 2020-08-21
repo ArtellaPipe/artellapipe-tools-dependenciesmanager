@@ -26,13 +26,13 @@ from tpDcc.libs.qt.core import qtutils
 from tpDcc.libs.qt.widgets import dividers
 
 import artellapipe
-from artellapipe.libs import artella
+from artellapipe.core import tool
 from artellapipe.libs.artella.core import artellalib
 
 LOGGER = logging.getLogger()
 
 
-class DependenciesManager(artellapipe.ToolWidget, object):
+class DependenciesManager(tool.ArtellaToolWidget, object):
 
     def __init__(self, project, config, settings, parent, file_path=None):
         self._init_file_path = file_path
@@ -102,7 +102,7 @@ class DependenciesManager(artellapipe.ToolWidget, object):
         self._files_list.resizeColumnToContents(0)
         self._files_list.setColumnWidth(1, 120)
 
-        self._progress = self._project.get_progress_bar()
+        self._progress = artellapipe.project.get_progress_bar()
         self._progress.setVisible(False)
         self._progress.setTextVisible(False)
         self._progress_lbl = QLabel('')
@@ -183,45 +183,46 @@ class DependenciesManager(artellapipe.ToolWidget, object):
 
         deps, invalid_deps = artellapipe.DepsMgr().get_dependencies(root_path)
 
-        project_path = self._project.get_path()
+        project_path = artellapipe.project.get_path()
 
-        invalid_deps_found = False
         invalid_deps_fixed = False
         if invalid_deps:
             invalid_deps_found = True
             result = qtutils.show_question(
                 None, 'Invalid dependencies found',
-                'Invalid dependencies paths found in current file. If you continue, dependencies manager will try to '
-                'fix them. Are you sure you want to continue?')
-            if result == QMessageBox.No:
-                return
-
-            artellapipe.DepsMgr().fix_file_paths(root_path)
-            deps, invalid_deps = artellapipe.DepsMgr().get_dependencies(root_path)
-            if invalid_deps:
-                artellapipe.FilesMgr().sync_files(invalid_deps)
+                'Invalid dependencies paths found in current file. Do you want to fix them?')
+            if result == QMessageBox.Yes:
+                artellapipe.DepsMgr().fix_file_paths(root_path)
                 deps, invalid_deps = artellapipe.DepsMgr().get_dependencies(root_path)
                 if invalid_deps:
-                    qtutils.show_warning(
-                        None, 'Invalid dependencies found',
-                        'Invalid dependencies paths found in current file.\n\n' + '\n'.join(
-                            invalid_deps) + 'Please fix paths manually!')
-                    return
+                    is_locked, by_user = artellalib.is_locked(root_path)
+                    if is_locked and not by_user:
+                        LOGGER.info(
+                            'Invalid dependencies found but cannot be fixed because other user has the file locked!')
+                        return
+                    artellapipe.FilesMgr().sync_files(invalid_deps)
+                    deps, invalid_deps = artellapipe.DepsMgr().get_dependencies(root_path)
+                    if invalid_deps:
+                        qtutils.show_warning(
+                            None, 'Invalid dependencies found',
+                            'Invalid dependencies paths found in current file.\n\n' + '\n'.join(
+                                invalid_deps) + '\nPlease fix paths manually!')
+                        return
+                    else:
+                        invalid_deps_fixed = True
                 else:
                     invalid_deps_fixed = True
-            else:
-                invalid_deps_fixed = True
 
-        if invalid_deps_found and invalid_deps_fixed:
-            result = qtutils.show_question(
-                None, 'File paths updated in file', 'File Paths fixed in the following file: "{}". '
-                'Do you want to upload new version of the file to Artella server?'.format(root_path))
-            if result == QMessageBox.Yes:
-                artellapipe.FilesMgr().upload_working_version(
-                    root_path, skip_saving=True, notify=False, comment='DependenciesManager: Fixed paths')
+            if invalid_deps_found and invalid_deps_fixed:
+                result = qtutils.show_question(
+                    None, 'File paths updated in file', 'File Paths fixed in the following file: "{}". '
+                    'Do you want to upload new version of the file to Artella server?'.format(root_path))
+                if result == QMessageBox.Yes:
+                    artellapipe.FilesMgr().upload_working_version(
+                        root_path, skip_saving=True, notify=False, comment='DependenciesManager: Fixed paths')
 
         if deps:
-            for file_path, files in deps.items():
+            for file_path, files_found in deps.items():
                 try:
                     rel_path = os.path.relpath(file_path, project_path)
                 except Exception:
@@ -230,7 +231,7 @@ class DependenciesManager(artellapipe.ToolWidget, object):
                 file_path_item.setText(0, rel_path)
                 file_path_item.path = file_path
 
-                for f in files:
+                for f in files_found:
                     try:
                         rel_path = os.path.relpath(f, project_path)
                     except Exception:
@@ -262,7 +263,7 @@ class DependenciesManager(artellapipe.ToolWidget, object):
         :return:
         """
 
-        working_folder = self._project.get_working_folder()
+        working_folder = artellapipe.project.get_working_folder()
 
         try:
             all_items = list(self._all_items())
@@ -287,7 +288,7 @@ class DependenciesManager(artellapipe.ToolWidget, object):
                     root_dir_name = os.path.basename(root_dir)
                     item_path = os.path.dirname(root_dir)
                     asset_path = os.path.dirname(item_path)
-                    latest_versions = artellalib.get_latest_version(asset_path)
+                    latest_versions = artellalib.get_latest_version(asset_path, check_validity=False)
                     current_version = artellalib.split_version(item_path)
                     current_version = current_version[1] if current_version else 0
                     latest_version = latest_versions.get(root_dir_name, None)
@@ -352,7 +353,7 @@ class DependenciesManager(artellapipe.ToolWidget, object):
         if stored_path and os.path.isdir(stored_path):
             start_directory = stored_path
         else:
-            start_directory = self._project.get_path()
+            start_directory = artellapipe.project.get_path()
 
         if not export_path or not os.path.isfile(export_path):
             export_path = tp.Dcc.select_file_dialog(
@@ -386,7 +387,7 @@ class DependenciesManager(artellapipe.ToolWidget, object):
         if result == QMessageBox.No:
             open_file = False
 
-        working_folder = self._project.get_working_folder()
+        working_folder = artellapipe.project.get_working_folder()
 
         locked = False
         try:
